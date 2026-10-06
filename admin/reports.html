@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Reports - Admin</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <a href="#" class="sidebar-logo"><i class="fas fa-utensils"></i> CanteenIQ Admin</a>
+      <ul class="nav-links">
+        <li><a href="index.html" class="nav-link"><i class="fas fa-chart-line"></i> Dashboard</a></li>
+        <li><a href="menu.html" class="nav-link"><i class="fas fa-hamburger"></i> Manage Menu</a></li>
+        <li><a href="bookings.html" class="nav-link"><i class="fas fa-ticket-alt"></i> Bookings</a></li>
+        <li><a href="waste.html" class="nav-link"><i class="fas fa-trash-alt"></i> Waste Tracker</a></li>
+        <li><a href="reports.html" class="nav-link active"><i class="fas fa-inbox"></i> Student Reports</a></li>
+        <li style="margin-top: auto;"><a href="#" id="logout-btn" class="nav-link text-danger"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+      </ul>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <h2>Student Reports & Feedback</h2>
+        <button id="theme-toggle" class="theme-toggle"></button>
+      </header>
+
+      <div class="card">
+        <div id="reports-container" class="grid gap-4">
+          <div class="text-center"><span class="loader"></span></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Reply Modal -->
+  <div class="modal-overlay" id="reply-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Reply to Report</h3>
+        <button class="modal-close"><i class="fas fa-times"></i></button>
+      </div>
+      <form id="reply-form">
+        <input type="hidden" id="reply-id">
+        <div class="form-group">
+          <label>Status Update</label>
+          <select id="reply-status" class="form-control">
+            <option value="in-progress">In Progress</option>
+            <option value="resolved">Resolved</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Admin Reply</label>
+          <textarea id="reply-text" class="form-control" rows="3" required></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary w-100" style="width:100%">Send Reply</button>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="../js/firebase-config.js"></script>
+  <script type="module" src="../js/ui.js"></script>
+  <script type="module">
+    import { requireAuth } from '../js/auth.js';
+    import { db } from '../js/firebase-config.js';
+    import { collection, onSnapshot, doc, updateDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+    import { showToast, openModal, closeModal } from '../js/ui.js';
+
+    requireAuth('admin');
+
+    const container = document.getElementById('reports-container');
+
+    const q = query(collection(db, 'reports'), orderBy('createdAt', 'desc'));
+    onSnapshot(q, (snapshot) => {
+      container.innerHTML = '';
+      if(snapshot.empty) {
+        container.innerHTML = `<div class="text-center text-muted">No reports found.</div>`;
+        return;
+      }
+      
+      snapshot.forEach(docSnap => {
+        const r = docSnap.data();
+        const id = docSnap.id;
+        
+        let badge = '';
+        if(r.status === 'pending') badge = '<span class="badge badge-danger">Pending</span>';
+        if(r.status === 'in-progress') badge = '<span class="badge badge-warning">In Progress</span>';
+        if(r.status === 'resolved') badge = '<span class="badge badge-success">Resolved</span>';
+
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.style.borderLeft = r.status === 'pending' ? '4px solid var(--danger)' : (r.status === 'resolved' ? '4px solid var(--secondary)' : '4px solid var(--warning)');
+        div.innerHTML = `
+          <div class="flex justify-between items-center mb-2">
+            <h4 style="margin:0; text-transform:capitalize;">${r.category} Issue</h4>
+            ${badge}
+          </div>
+          <p class="text-muted" style="font-size:0.9rem;">${r.description}</p>
+          ${r.adminReply ? `<div class="mt-2 p-2" style="background: rgba(0,0,0,0.05); border-radius: 4px; font-size: 0.9rem;"><strong>Admin Reply:</strong> ${r.adminReply}</div>` : ''}
+          <div class="mt-2 text-right">
+            <button class="btn btn-secondary btn-sm reply-btn" data-id="${id}" data-status="${r.status}">Update / Reply</button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+
+      document.querySelectorAll('.reply-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const id = e.target.dataset.id;
+          const status = e.target.dataset.status;
+          document.getElementById('reply-id').value = id;
+          if(status !== 'pending') document.getElementById('reply-status').value = status;
+          openModal('reply-modal');
+        });
+      });
+    });
+
+    // Handle Reply
+    document.getElementById('reply-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('reply-id').value;
+      try {
+        await updateDoc(doc(db, 'reports', id), {
+          status: document.getElementById('reply-status').value,
+          adminReply: document.getElementById('reply-text').value,
+          updatedAt: new Date()
+        });
+        showToast('Report updated successfully', 'success');
+        closeModal('reply-modal');
+        e.target.reset();
+      } catch(err) {
+        showToast('Error updating report', 'error');
+      }
+    });
+  </script>
+</body>
+</html>

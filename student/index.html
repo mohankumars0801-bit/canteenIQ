@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Dashboard - CanteenIQ</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <a href="#" class="sidebar-logo">
+        <i class="fas fa-utensils"></i> CanteenIQ
+      </a>
+      <div class="mb-4 text-center">
+        <div style="width: 60px; height: 60px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin: 0 auto 0.5rem; font-weight: bold;">
+          S
+        </div>
+        <div id="user-name" style="font-weight: 600;">Student User</div>
+        <div class="badge badge-success mt-1">Student</div>
+      </div>
+      <ul class="nav-links">
+        <li><a href="index.html" class="nav-link active"><i class="fas fa-bars"></i> Menu & Booking</a></li>
+        <li><a href="bookings.html" class="nav-link"><i class="fas fa-ticket-alt"></i> My Bookings</a></li>
+        <li><a href="reports.html" class="nav-link"><i class="fas fa-exclamation-circle"></i> Report Issue</a></li>
+        <li style="margin-top: 1rem;"><a href="../admin/index.html" class="nav-link" style="color: var(--warning); background: rgba(245, 158, 11, 0.1); border: 1px solid var(--warning);"><i class="fas fa-brain"></i> AI Demand Analytics</a></li>
+        <li style="margin-top: auto;"><a href="#" id="logout-btn" class="nav-link text-danger"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+      </ul>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <header class="topbar">
+        <h2>Today's Menu</h2>
+        <button id="theme-toggle" class="theme-toggle"></button>
+      </header>
+
+      <!-- Category Filter -->
+      <div class="mb-4 flex gap-2" style="overflow-x: auto; padding-bottom: 0.5rem;" id="category-filters">
+        <button class="btn btn-primary btn-sm" data-cat="all">All</button>
+        <button class="btn btn-secondary btn-sm" data-cat="breakfast">Breakfast</button>
+        <button class="btn btn-secondary btn-sm" data-cat="lunch">Lunch</button>
+        <button class="btn btn-secondary btn-sm" data-cat="snacks">Snacks</button>
+      </div>
+
+      <!-- Menu Grid -->
+      <div id="menu-container" class="menu-grid">
+        <div class="text-center" style="grid-column: 1/-1;"><span class="loader"></span> Loading menu...</div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Booking Modal -->
+  <div class="modal-overlay" id="booking-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-item-name">Book Item</h3>
+        <button class="modal-close"><i class="fas fa-times"></i></button>
+      </div>
+      <form id="booking-form">
+        <input type="hidden" id="book-item-id">
+        <input type="hidden" id="book-item-price">
+        
+        <div class="form-group">
+          <label>Quantity</label>
+          <input type="number" id="book-qty" class="form-control" value="1" min="1" max="5" required>
+        </div>
+        
+        <div class="form-group">
+          <label>Pickup Time Slot</label>
+          <select id="book-slot" class="form-control" required>
+            <option value="12:00 - 12:30 PM">12:00 - 12:30 PM</option>
+            <option value="12:30 - 01:00 PM">12:30 - 01:00 PM</option>
+            <option value="01:00 - 01:30 PM">01:00 - 01:30 PM</option>
+            <option value="01:30 - 02:00 PM">01:30 - 02:00 PM</option>
+          </select>
+          <div id="queue-status" class="mt-1" style="font-size: 0.8rem;"></div>
+        </div>
+
+        <div class="flex justify-between items-center mt-4 pt-4" style="border-top: 1px solid var(--border)">
+          <div style="font-size: 1.25rem; font-weight: bold;">Total: ₹<span id="book-total">0</span></div>
+          <button type="submit" class="btn btn-primary">Confirm Booking</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="../js/firebase-config.js"></script>
+  <script type="module" src="../js/ui.js"></script>
+  <script type="module">
+    import { requireAuth } from '../js/auth.js';
+    import { db, auth } from '../js/firebase-config.js';
+    import { collection, onSnapshot, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+    import { showToast, openModal, closeModal } from '../js/ui.js';
+    import { getSlotQueueStatus } from '../js/bookings.js';
+
+    requireAuth('student');
+
+    const menuContainer = document.getElementById('menu-container');
+    let allItems = [];
+
+    // Load Menu
+    onSnapshot(collection(db, 'menuItems'), (snapshot) => {
+      allItems = [];
+      snapshot.forEach(doc => {
+        if(doc.data().isAvailable) {
+          allItems.push({ id: doc.id, ...doc.data() });
+        }
+      });
+      renderMenu('all');
+    });
+
+    // Render Menu
+    function renderMenu(category) {
+      menuContainer.innerHTML = '';
+      const filtered = category === 'all' ? allItems : allItems.filter(i => i.category === category);
+      
+      if(filtered.length === 0) {
+        menuContainer.innerHTML = `
+          <div class="text-center" style="grid-column: 1/-1; padding: 4rem 1rem; background: var(--surface); border-radius: var(--radius); border: 2px dashed var(--primary); box-shadow: var(--shadow-lg);">
+            <i class="fas fa-box-open" style="font-size: 4rem; color: var(--primary); margin-bottom: 1rem;"></i>
+            <h2 class="mb-2">The Menu is Empty!</h2>
+            <p class="text-muted mb-4" style="font-size: 1.1rem; max-width: 500px; margin: 0 auto;">Because this is a brand new project, there is no food in the database yet. Click the button below to automatically generate realistic Canteen items and 30-days of fake business data for the AI!</p>
+            <button id="quick-seed-btn" class="btn btn-primary" style="font-size: 1.2rem; padding: 1rem 2rem; border-radius: 50px; margin-top: 1rem;"><i class="fas fa-magic"></i> Auto-Generate Menu & AI Data</button>
+          </div>
+        `;
+        
+        document.getElementById('quick-seed-btn').addEventListener('click', async (e) => {
+          e.target.innerHTML = '<span class="loader"></span> Generating Data...';
+          e.target.disabled = true;
+          try {
+            const items = [
+              { name: 'Veg Thali', price: 60, category: 'lunch', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=300' },
+              { name: 'Chicken Biryani', price: 120, category: 'lunch', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=300' },
+              { name: 'Paneer Butter Masala', price: 90, category: 'lunch', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f39ce9b1?w=300' },
+              { name: 'Samosa (2 pcs)', price: 20, category: 'snacks', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=300' },
+              { name: 'Masala Dosa', price: 45, category: 'breakfast', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f39ce9b1?w=300' },
+              { name: 'Idli & Vada', price: 35, category: 'breakfast', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f39ce9b1?w=300' },
+              { name: 'French Fries', price: 40, category: 'snacks', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1576107222646-7ab5de67e811?w=300' },
+              { name: 'Cold Coffee', price: 30, category: 'snacks', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1461023058943-07fcbe16d735?w=300' }
+            ];
+            let itemIds = [];
+            for (const item of items) {
+              const docRef = await addDoc(collection(db, 'menuItems'), item);
+              itemIds.push(docRef.id);
+            }
+            for (let i = 0; i < 30; i++) {
+              const d = new Date(); d.setDate(d.getDate() - i);
+              for(const id of itemIds) {
+                 await addDoc(collection(db, 'salesHistory'), { itemId: id, date: d, quantity: Math.floor(Math.random() * 50) + 10 });
+              }
+            }
+            showToast('Menu & AI Data generated successfully!', 'success');
+          } catch(err) {
+            showToast('Error: ' + err.message, 'error');
+            e.target.innerHTML = 'Try Again';
+            e.target.disabled = false;
+          }
+        });
+        return;
+      }
+
+      filtered.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'card menu-item';
+        div.innerHTML = `
+          <img src="${item.imageUrl || 'https://via.placeholder.com/300x200?text=No+Image'}" alt="${item.name}" class="menu-item-img">
+          <div class="menu-item-content">
+            <div class="menu-item-header">
+              <div class="menu-item-title">${item.name}</div>
+              <div class="menu-item-price">₹${item.price}</div>
+            </div>
+            <div class="menu-item-meta">${item.category.charAt(0).toUpperCase() + item.category.slice(1)}</div>
+            
+            <div class="mt-auto">
+              <button class="btn btn-primary w-100 book-btn" style="width: 100%" data-id="${item.id}" data-name="${item.name}" data-price="${item.price}">
+                <i class="fas fa-plus"></i> Book Now
+              </button>
+            </div>
+          </div>
+        `;
+        menuContainer.appendChild(div);
+      });
+
+      // Attach booking event
+      document.querySelectorAll('.book-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const btnData = e.target.closest('button').dataset;
+          document.getElementById('modal-item-name').textContent = `Book ${btnData.name}`;
+          document.getElementById('book-item-id').value = btnData.id;
+          document.getElementById('book-item-price').value = btnData.price;
+          document.getElementById('book-qty').value = 1;
+          updateTotal();
+          updateQueueStatus();
+          openModal('booking-modal');
+        });
+      });
+    }
+
+    // Filter Buttons
+    document.querySelectorAll('#category-filters button').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('#category-filters button').forEach(b => {
+          b.classList.remove('btn-primary');
+          b.classList.add('btn-secondary');
+        });
+        e.target.classList.remove('btn-secondary');
+        e.target.classList.add('btn-primary');
+        renderMenu(e.target.dataset.cat);
+      });
+    });
+
+    // Booking Logic
+    const qtyInput = document.getElementById('book-qty');
+    const slotSelect = document.getElementById('book-slot');
+    
+    function updateTotal() {
+      const price = parseFloat(document.getElementById('book-item-price').value);
+      const qty = parseInt(qtyInput.value) || 1;
+      document.getElementById('book-total').textContent = (price * qty).toFixed(2);
+    }
+    
+    async function updateQueueStatus() {
+      const statusDiv = document.getElementById('queue-status');
+      statusDiv.innerHTML = '<span class="text-muted"><i class="fas fa-spinner fa-spin"></i> Checking queue...</span>';
+      const status = await getSlotQueueStatus(slotSelect.value);
+      statusDiv.innerHTML = `<span class="badge badge-${status.color}">Traffic: ${status.level}</span> <span class="text-muted">Est wait: ${status.wait}</span>`;
+    }
+
+    qtyInput.addEventListener('input', updateTotal);
+    slotSelect.addEventListener('change', updateQueueStatus);
+
+    document.getElementById('booking-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="loader"></span>';
+
+      try {
+        const docRef = await addDoc(collection(db, 'bookings'), {
+          studentId: auth.currentUser ? auth.currentUser.uid : 'guest-student-123',
+          itemId: document.getElementById('book-item-id').value,
+          itemName: document.getElementById('modal-item-name').textContent.replace('Book ', ''),
+          quantity: parseInt(qtyInput.value),
+          totalPrice: parseFloat(document.getElementById('book-total').textContent),
+          pickupSlot: slotSelect.value,
+          pickupTime: new Date(), // Storing created date, actual slot is in pickupSlot
+          status: 'pending',
+          createdAt: serverTimestamp()
+        });
+
+        showToast('Booking confirmed!', 'success');
+        closeModal('booking-modal');
+        // Redirect to bookings page to see QR code
+        setTimeout(() => { window.location.href = 'bookings.html'; }, 1000);
+      } catch (error) {
+        showToast('Error booking item: ' + error.message, 'error');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = 'Confirm Booking';
+      }
+    });
+
+  </script>
+</body>
+</html>

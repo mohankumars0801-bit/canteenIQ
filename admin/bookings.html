@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Bookings - Admin</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <a href="#" class="sidebar-logo"><i class="fas fa-utensils"></i> CanteenIQ Admin</a>
+      <ul class="nav-links">
+        <li><a href="index.html" class="nav-link"><i class="fas fa-chart-line"></i> Dashboard</a></li>
+        <li><a href="menu.html" class="nav-link"><i class="fas fa-hamburger"></i> Manage Menu</a></li>
+        <li><a href="bookings.html" class="nav-link active"><i class="fas fa-ticket-alt"></i> Bookings</a></li>
+        <li><a href="waste.html" class="nav-link"><i class="fas fa-trash-alt"></i> Waste Tracker</a></li>
+        <li><a href="reports.html" class="nav-link"><i class="fas fa-inbox"></i> Student Reports</a></li>
+        <li style="margin-top: auto;"><a href="#" id="logout-btn" class="nav-link text-danger"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+      </ul>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <h2>Live Bookings</h2>
+        <div class="flex gap-2">
+          <input type="text" id="scan-qr" class="form-control" placeholder="Scan QR / Enter ID..." style="width: 250px;">
+          <button id="theme-toggle" class="theme-toggle"></button>
+        </div>
+      </header>
+
+      <div class="card">
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Booking ID</th>
+                <th>Item</th>
+                <th>Qty</th>
+                <th>Time Slot</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="admin-bookings-body">
+              <tr><td colspan="6" class="text-center"><span class="loader"></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="../js/firebase-config.js"></script>
+  <script type="module" src="../js/ui.js"></script>
+  <script type="module">
+    import { requireAuth } from '../js/auth.js';
+    import { db } from '../js/firebase-config.js';
+    import { collection, onSnapshot, doc, updateDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+    import { showToast } from '../js/ui.js';
+
+    requireAuth('admin');
+
+    // Load Bookings
+    const q = query(collection(db, 'bookings'), orderBy('createdAt', 'desc'));
+    onSnapshot(q, (snapshot) => {
+      const tbody = document.getElementById('admin-bookings-body');
+      tbody.innerHTML = '';
+      snapshot.forEach(docSnap => {
+        const b = docSnap.data();
+        const id = docSnap.id;
+        
+        let statusBadge = '';
+        if(b.status === 'pending') statusBadge = '<span class="badge badge-warning">Pending</span>';
+        if(b.status === 'collected') statusBadge = '<span class="badge badge-success">Collected</span>';
+        if(b.status === 'cancelled') statusBadge = '<span class="badge badge-danger">Cancelled</span>';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="font-family: monospace; font-weight:bold;">${id.substring(0,6).toUpperCase()}</td>
+          <td>${b.itemName}</td>
+          <td>${b.quantity}</td>
+          <td>${b.pickupSlot}</td>
+          <td>${statusBadge}</td>
+          <td>
+            ${b.status === 'pending' ? `<button class="btn btn-secondary btn-sm collect-btn" data-id="${id}">Mark Collected</button>` : '-'}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.querySelectorAll('.collect-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = e.target.dataset.id;
+          await updateDoc(doc(db, 'bookings', id), { status: 'collected' });
+          showToast('Order marked as collected', 'success');
+        });
+      });
+    });
+
+    // Simple QR Search Simulation
+    document.getElementById('scan-qr').addEventListener('keyup', (e) => {
+      if(e.key === 'Enter') {
+        const val = e.target.value.toLowerCase();
+        // Just a simple visual filter for now
+        const rows = document.querySelectorAll('#admin-bookings-body tr');
+        rows.forEach(r => {
+          const idCell = r.querySelector('td:first-child');
+          if(idCell && idCell.textContent.toLowerCase().includes(val)) {
+            r.style.display = '';
+          } else {
+            r.style.display = 'none';
+          }
+        });
+      }
+    });
+  </script>
+</body>
+</html>

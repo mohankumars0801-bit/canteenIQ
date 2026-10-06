@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Waste Tracker - Admin</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <a href="#" class="sidebar-logo"><i class="fas fa-utensils"></i> CanteenIQ Admin</a>
+      <ul class="nav-links">
+        <li><a href="index.html" class="nav-link"><i class="fas fa-chart-line"></i> Dashboard</a></li>
+        <li><a href="menu.html" class="nav-link"><i class="fas fa-hamburger"></i> Manage Menu</a></li>
+        <li><a href="bookings.html" class="nav-link"><i class="fas fa-ticket-alt"></i> Bookings</a></li>
+        <li><a href="waste.html" class="nav-link active"><i class="fas fa-trash-alt"></i> Waste Tracker</a></li>
+        <li><a href="reports.html" class="nav-link"><i class="fas fa-inbox"></i> Student Reports</a></li>
+        <li style="margin-top: auto;"><a href="#" id="logout-btn" class="nav-link text-danger"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+      </ul>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <h2>Food Waste Tracker</h2>
+        <button id="theme-toggle" class="theme-toggle"></button>
+      </header>
+
+      <div class="grid grid-cols-2 gap-4">
+        <!-- Log Waste Form -->
+        <div class="card">
+          <h3 class="mb-4">Log End-of-Day Waste</h3>
+          <form id="waste-form">
+            <div class="form-group">
+              <label>Select Item</label>
+              <select id="waste-item" class="form-control" required></select>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div class="form-group">
+                <label>Qty Cooked</label>
+                <input type="number" id="waste-cooked" class="form-control" required min="1">
+              </div>
+              <div class="form-group">
+                <label>Qty Leftover</label>
+                <input type="number" id="waste-left" class="form-control" required min="0">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Reason</label>
+              <select id="waste-reason" class="form-control" required>
+                <option value="overcooked">Over-prepared</option>
+                <option value="low-demand">Lower demand than expected</option>
+                <option value="quality">Quality issue</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <button type="submit" class="btn btn-primary w-100" style="width: 100%">Log Waste</button>
+          </form>
+        </div>
+
+        <!-- Waste History -->
+        <div class="card">
+          <h3 class="mb-4">Recent Waste Logs</h3>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Waste %</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody id="waste-body">
+                <tr><td colspan="3" class="text-center"><span class="loader"></span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="../js/firebase-config.js"></script>
+  <script type="module" src="../js/ui.js"></script>
+  <script type="module">
+    import { requireAuth } from '../js/auth.js';
+    import { db } from '../js/firebase-config.js';
+    import { collection, onSnapshot, addDoc, serverTimestamp, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+    import { showToast } from '../js/ui.js';
+
+    requireAuth('admin');
+
+    // Load Menu for select
+    onSnapshot(collection(db, 'menuItems'), (snap) => {
+      const select = document.getElementById('waste-item');
+      select.innerHTML = '<option value="">Select...</option>';
+      snap.forEach(doc => {
+        const item = doc.data();
+        if(item.isAvailable) {
+          select.innerHTML += `<option value="${doc.id}" data-name="${item.name}">${item.name}</option>`;
+        }
+      });
+    });
+
+    // Load Logs
+    const q = query(collection(db, 'wasteLogs'), orderBy('createdAt', 'desc'), limit(10));
+    onSnapshot(q, (snap) => {
+      const tbody = document.getElementById('waste-body');
+      tbody.innerHTML = '';
+      if(snap.empty) {
+        tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted">No logs yet.</td></tr>`;
+        return;
+      }
+      snap.forEach(docSnap => {
+        const w = docSnap.data();
+        
+        let perc = ((w.leftover / w.cooked) * 100).toFixed(1);
+        let badgeClass = 'badge-success';
+        if (perc > 10) badgeClass = 'badge-warning';
+        if (perc > 20) badgeClass = 'badge-danger'; // High waste flag
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="font-weight: 500;">${w.itemName}</td>
+          <td><span class="badge ${badgeClass}">${perc}%</span></td>
+          <td>${w.reason}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    });
+
+    // Submit Log
+    document.getElementById('waste-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const cooked = parseInt(document.getElementById('waste-cooked').value);
+      const left = parseInt(document.getElementById('waste-left').value);
+      
+      if(left > cooked) {
+        showToast('Leftover cannot exceed cooked quantity!', 'error');
+        return;
+      }
+
+      const select = document.getElementById('waste-item');
+      const itemName = select.options[select.selectedIndex].dataset.name;
+
+      try {
+        await addDoc(collection(db, 'wasteLogs'), {
+          itemId: select.value,
+          itemName: itemName,
+          cooked: cooked,
+          leftover: left,
+          reason: document.getElementById('waste-reason').value,
+          createdAt: serverTimestamp()
+        });
+        showToast('Waste logged successfully', 'success');
+        e.target.reset();
+      } catch(err) {
+        showToast('Error logging waste: ' + err.message, 'error');
+      }
+    });
+  </script>
+</body>
+</html>

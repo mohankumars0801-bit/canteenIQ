@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Bookings - CanteenIQ</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <a href="#" class="sidebar-logo">
+        <i class="fas fa-utensils"></i> CanteenIQ
+      </a>
+      <ul class="nav-links">
+        <li><a href="index.html" class="nav-link"><i class="fas fa-bars"></i> Menu & Booking</a></li>
+        <li><a href="bookings.html" class="nav-link active"><i class="fas fa-ticket-alt"></i> My Bookings</a></li>
+        <li><a href="reports.html" class="nav-link"><i class="fas fa-exclamation-circle"></i> Report Issue</a></li>
+        <li style="margin-top: auto;"><a href="#" id="logout-btn" class="nav-link text-danger"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+      </ul>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <header class="topbar">
+        <h2>My Bookings</h2>
+        <button id="theme-toggle" class="theme-toggle"></button>
+      </header>
+
+      <div class="card">
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Qty</th>
+                <th>Total</th>
+                <th>Pickup Slot</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="bookings-body">
+              <tr><td colspan="6" class="text-center"><span class="loader"></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- QR Code Modal -->
+  <div class="modal-overlay" id="qr-modal">
+    <div class="modal text-center">
+      <div class="modal-header">
+        <h3>Booking QR Code</h3>
+        <button class="modal-close"><i class="fas fa-times"></i></button>
+      </div>
+      <p class="text-muted mb-2">Show this at the counter to collect your food.</p>
+      <div id="qr-code-container"></div>
+      <div class="mt-4" style="font-size: 1.5rem; font-weight: bold; letter-spacing: 2px;" id="qr-booking-id"></div>
+    </div>
+  </div>
+
+  <script type="module" src="../js/firebase-config.js"></script>
+  <script type="module" src="../js/ui.js"></script>
+  <!-- Load QRCode.js from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  
+  <script type="module">
+    import { requireAuth } from '../js/auth.js';
+    import { db, auth } from '../js/firebase-config.js';
+    import { collection, query, where, orderBy, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+    import { showToast, openModal } from '../js/ui.js';
+
+    requireAuth('student');
+    let qrInstance = null;
+
+    // Listen for auth state to get UID, then load bookings
+    auth.onAuthStateChanged(user => {
+      const uid = user ? user.uid : 'guest-student-123';
+      const q = query(collection(db, 'bookings'), where('studentId', '==', uid), orderBy('createdAt', 'desc'));
+      onSnapshot(q, (snapshot) => {
+          const tbody = document.getElementById('bookings-body');
+          tbody.innerHTML = '';
+          
+          if(snapshot.empty) {
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">No bookings found.</td></tr>`;
+            return;
+          }
+
+          snapshot.forEach(docSnap => {
+            const b = docSnap.data();
+            const id = docSnap.id;
+            let statusBadge = '';
+            if(b.status === 'pending') statusBadge = '<span class="badge badge-warning">Pending</span>';
+            if(b.status === 'collected') statusBadge = '<span class="badge badge-success">Collected</span>';
+            if(b.status === 'cancelled') statusBadge = '<span class="badge badge-danger">Cancelled</span>';
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td style="font-weight: 500;">${b.itemName}</td>
+              <td>${b.quantity}</td>
+              <td>₹${b.totalPrice}</td>
+              <td>${b.pickupSlot}</td>
+              <td>${statusBadge}</td>
+              <td>
+                ${b.status === 'pending' ? `<button class="btn btn-primary btn-sm show-qr-btn" data-id="${id}">Show QR</button>` : '-'}
+                ${b.status === 'pending' ? `<button class="btn btn-danger btn-sm cancel-btn ml-2" data-id="${id}">Cancel</button>` : ''}
+              </td>
+            `;
+            tbody.appendChild(tr);
+          });
+
+          // Attach Events
+          document.querySelectorAll('.show-qr-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              const id = e.target.dataset.id;
+              const qrContainer = document.getElementById('qr-code-container');
+              qrContainer.innerHTML = '';
+              if (qrInstance) qrInstance.clear();
+              qrInstance = new QRCode(qrContainer, {
+                text: id,
+                width: 200,
+                height: 200,
+              });
+              document.getElementById('qr-booking-id').textContent = id.substring(0,6).toUpperCase();
+              openModal('qr-modal');
+            });
+          });
+
+          document.querySelectorAll('.cancel-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+              if(confirm("Are you sure you want to cancel this booking?")) {
+                const id = e.target.dataset.id;
+                try {
+                  await updateDoc(doc(db, 'bookings', id), { status: 'cancelled' });
+                  showToast('Booking cancelled', 'success');
+                } catch(err) {
+                  showToast('Error cancelling', 'error');
+                }
+              }
+            });
+          });
+
+        });
+      }
+    });
+
+  </script>
+</body>
+</html>

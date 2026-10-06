@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Report Issue - CanteenIQ</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <a href="#" class="sidebar-logo"><i class="fas fa-utensils"></i> CanteenIQ</a>
+      <ul class="nav-links">
+        <li><a href="index.html" class="nav-link"><i class="fas fa-bars"></i> Menu & Booking</a></li>
+        <li><a href="bookings.html" class="nav-link"><i class="fas fa-ticket-alt"></i> My Bookings</a></li>
+        <li><a href="reports.html" class="nav-link active"><i class="fas fa-exclamation-circle"></i> Report Issue</a></li>
+        <li style="margin-top: auto;"><a href="#" id="logout-btn" class="nav-link text-danger"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+      </ul>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <h2>Report an Issue</h2>
+        <button id="theme-toggle" class="theme-toggle"></button>
+      </header>
+
+      <div class="grid grid-cols-2 gap-4">
+        <!-- Report Form -->
+        <div class="card">
+          <form id="report-form">
+            <div class="form-group">
+              <label>Category</label>
+              <select id="report-category" class="form-control" required>
+                <option value="food quality">Food Quality</option>
+                <option value="hygiene">Hygiene</option>
+                <option value="waste">Food Waste</option>
+                <option value="overcharge">Overcharge</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <textarea id="report-desc" class="form-control" rows="4" required placeholder="Describe the issue in detail..."></textarea>
+            </div>
+            <!-- Note: Storage file upload omitted for CDN simplicity, keeping text logic -->
+            <button type="submit" class="btn btn-primary" style="width: 100%">Submit Report</button>
+          </form>
+        </div>
+
+        <!-- My Reports History -->
+        <div>
+          <h3 class="mb-4">My Previous Reports</h3>
+          <div id="my-reports-container" class="grid gap-2">
+            <span class="loader"></span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="../js/firebase-config.js"></script>
+  <script type="module" src="../js/ui.js"></script>
+  <script type="module">
+    import { requireAuth } from '../js/auth.js';
+    import { db, auth } from '../js/firebase-config.js';
+    import { collection, addDoc, serverTimestamp, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+    import { showToast } from '../js/ui.js';
+
+    requireAuth('student');
+
+    auth.onAuthStateChanged(user => {
+      const uid = user ? user.uid : 'guest-student-123';
+      
+      // Load user's reports
+      const q = query(collection(db, 'reports'), where('studentId', '==', uid), orderBy('createdAt', 'desc'));
+      onSnapshot(q, (snapshot) => {
+        const container = document.getElementById('my-reports-container');
+        container.innerHTML = '';
+        if(snapshot.empty) {
+          container.innerHTML = '<div class="text-muted text-center card">You have not submitted any reports.</div>';
+          return;
+        }
+
+        snapshot.forEach(docSnap => {
+          const r = docSnap.data();
+          let badge = '';
+          if(r.status === 'pending') badge = '<span class="badge badge-danger">Pending</span>';
+          if(r.status === 'in-progress') badge = '<span class="badge badge-warning">In Progress</span>';
+          if(r.status === 'resolved') badge = '<span class="badge badge-success">Resolved</span>';
+
+          const div = document.createElement('div');
+          div.className = 'card';
+          div.style.padding = '1rem';
+          div.innerHTML = `
+            <div class="flex justify-between items-center mb-1">
+              <strong style="text-transform:capitalize;">${r.category}</strong>
+              ${badge}
+            </div>
+            <div class="text-muted" style="font-size: 0.85rem; margin-bottom: 0.5rem;">${r.description}</div>
+            ${r.adminReply ? `<div style="background: rgba(16, 185, 129, 0.1); padding: 0.5rem; border-radius: 4px; font-size: 0.85rem; border-left: 2px solid var(--secondary);"><strong>Admin:</strong> ${r.adminReply}</div>` : ''}
+          `;
+          container.appendChild(div);
+        });
+      });
+    });
+
+    // Submit Report
+    document.getElementById('report-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = e.target.querySelector('button');
+      btn.innerHTML = '<span class="loader"></span>';
+      btn.disabled = true;
+
+      try {
+        await addDoc(collection(db, 'reports'), {
+          studentId: auth.currentUser ? auth.currentUser.uid : 'guest-student-123',
+          category: document.getElementById('report-category').value,
+          description: document.getElementById('report-desc').value,
+          status: 'pending',
+          adminReply: null,
+          createdAt: serverTimestamp()
+        });
+        showToast('Report submitted successfully.', 'success');
+        e.target.reset();
+      } catch (err) {
+        showToast('Error submitting report: ' + err.message, 'error');
+      } finally {
+        btn.innerHTML = 'Submit Report';
+        btn.disabled = false;
+      }
+    });
+
+  </script>
+</body>
+</html>

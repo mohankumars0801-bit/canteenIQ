@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - CanteenIQ</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <a href="#" class="sidebar-logo">
+        <i class="fas fa-utensils"></i> CanteenIQ Admin
+      </a>
+      <ul class="nav-links">
+        <li><a href="index.html" class="nav-link active"><i class="fas fa-chart-line"></i> Dashboard</a></li>
+        <li><a href="menu.html" class="nav-link"><i class="fas fa-hamburger"></i> Manage Menu</a></li>
+        <li><a href="bookings.html" class="nav-link"><i class="fas fa-ticket-alt"></i> Bookings</a></li>
+        <li><a href="waste.html" class="nav-link"><i class="fas fa-trash-alt"></i> Waste Tracker</a></li>
+        <li><a href="reports.html" class="nav-link"><i class="fas fa-inbox"></i> Student Reports</a></li>
+        <li style="margin-top: auto;"><a href="#" id="logout-btn" class="nav-link text-danger"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+      </ul>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <header class="topbar">
+        <h2>Analytics Dashboard</h2>
+        <div class="flex gap-2">
+          <button id="seed-btn" class="btn btn-secondary btn-sm"><i class="fas fa-database"></i> Seed Data</button>
+          <button id="theme-toggle" class="theme-toggle"></button>
+        </div>
+      </header>
+
+      <!-- Stats Grid -->
+      <div class="grid grid-cols-4 gap-4 mb-4">
+        <div class="card text-center">
+          <div class="text-muted mb-1">Today's Revenue</div>
+          <h3 style="font-size: 2rem; color: var(--primary);" id="stat-revenue">₹0</h3>
+        </div>
+        <div class="card text-center">
+          <div class="text-muted mb-1">Pending Orders</div>
+          <h3 style="font-size: 2rem;" id="stat-orders">0</h3>
+        </div>
+        <div class="card text-center">
+          <div class="text-muted mb-1">Items Active</div>
+          <h3 style="font-size: 2rem;" id="stat-items">0</h3>
+        </div>
+        <div class="card text-center">
+          <div class="text-muted mb-1">Avg Waste %</div>
+          <h3 style="font-size: 2rem; color: var(--danger);" id="stat-waste">0%</h3>
+        </div>
+      </div>
+
+      <!-- Charts -->
+      <div class="grid grid-cols-2 gap-4">
+        <div class="card">
+          <h3 class="mb-2">Sales Trend (Last 7 Days)</h3>
+          <div class="chart-container">
+            <canvas id="salesChart"></canvas>
+          </div>
+        </div>
+        <div class="card" style="grid-column: span 2;">
+          <div class="flex justify-between items-center mb-2">
+            <h3 class="mb-0"><i class="fas fa-brain" style="color: var(--primary)"></i> Business Analysis: AI Demand Prediction (Tomorrow)</h3>
+            <span class="badge badge-warning">Updated Live</span>
+          </div>
+          <p class="text-muted mb-4" style="font-size: 0.9rem;">
+            Our algorithm analyzes a 7-day weighted moving average of historical sales, applies day-of-week weekend penalties, and adds live pre-bookings to predict exact inventory needs.
+          </p>
+          <div class="table-responsive">
+            <table class="table-sm">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Pre-booked</th>
+                  <th>Predicted</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="prediction-body">
+                <tr><td colspan="4" class="text-center"><span class="loader"></span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Menu Management Form -->
+      <div class="card mt-4" style="grid-column: span 2;">
+        <h3 class="mb-4"><i class="fas fa-hamburger" style="color: var(--primary)"></i> Create & Manage Menu List</h3>
+        
+        <form id="add-food-form" class="flex gap-2" style="flex-wrap: wrap; align-items: flex-end; margin-bottom: 2rem; background: var(--bg); padding: 1rem; border-radius: var(--radius); border: 1px solid var(--border);">
+          <div style="flex: 1; min-width: 200px;">
+            <label>Food Name</label>
+            <input type="text" id="new-food-name" class="input" placeholder="e.g. Masala Dosa" required>
+          </div>
+          <div style="flex: 1; min-width: 100px;">
+            <label>Price (₹)</label>
+            <input type="number" id="new-food-price" class="input" placeholder="45" required>
+          </div>
+          <div style="flex: 1; min-width: 150px;">
+            <label>Category</label>
+            <select id="new-food-cat" class="input" required>
+              <option value="breakfast">Breakfast</option>
+              <option value="lunch">Lunch</option>
+              <option value="snacks">Snacks</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary" style="height: 42px;"><i class="fas fa-plus"></i> Add to Menu</button>
+        </form>
+
+        <h4 class="mb-2">Current Food Items on Website</h4>
+        <div class="table-responsive">
+          <table class="table-sm">
+            <thead>
+              <tr>
+                <th>Image</th>
+                <th>Name</th>
+                <th>Category</th>
+                <th>Price</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="admin-menu-body">
+              <tr><td colspan="5" class="text-center text-muted">Loading menu...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="../js/firebase-config.js"></script>
+  <script type="module" src="../js/ui.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <script type="module">
+    import { requireAuth } from '../js/auth.js';
+    import { db } from '../js/firebase-config.js';
+    import { collection, onSnapshot, getDocs, query, where, addDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+    import { predictDemand } from '../js/predict.js';
+    import { showToast } from '../js/ui.js';
+
+    requireAuth('admin');
+
+    // Admin Menu Management Logic
+    onSnapshot(collection(db, 'menuItems'), (snapshot) => {
+      const tbody = document.getElementById('admin-menu-body');
+      tbody.innerHTML = '';
+      if(snapshot.empty) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No food items added yet.</td></tr>';
+        return;
+      }
+      snapshot.forEach(docSnap => {
+        const item = docSnap.data();
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><img src="${item.imageUrl}" alt="${item.name}" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;"></td>
+          <td style="font-weight: bold;">${item.name}</td>
+          <td style="text-transform: capitalize;">${item.category}</td>
+          <td>₹${item.price}</td>
+          <td><button class="btn btn-secondary btn-sm delete-food-btn" data-id="${docSnap.id}" style="background: var(--danger); border:none; color: white;"><i class="fas fa-trash"></i></button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // Bind delete buttons
+      document.querySelectorAll('.delete-food-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = e.target.closest('button').dataset.id;
+          if(confirm('Delete this food item completely?')) {
+            await deleteDoc(doc(db, 'menuItems', id));
+            showToast('Food removed', 'success');
+          }
+        });
+      });
+    });
+
+    // Add New Food Form
+    document.getElementById('add-food-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('new-food-name').value;
+      const price = parseInt(document.getElementById('new-food-price').value);
+      const category = document.getElementById('new-food-cat').value;
+      
+      try {
+        await addDoc(collection(db, 'menuItems'), {
+          name, price, category, isAvailable: true,
+          imageUrl: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=300'
+        });
+        showToast(name + ' added to menu!', 'success');
+        document.getElementById('add-food-form').reset();
+      } catch(err) {
+        showToast('Error adding food', 'error');
+      }
+    });
+
+    // Load basic stats
+    onSnapshot(collection(db, 'bookings'), (snap) => {
+      let revenue = 0;
+      let pending = 0;
+      snap.forEach(doc => {
+        const d = doc.data();
+        if(d.status === 'collected') revenue += d.totalPrice;
+        if(d.status === 'pending') pending++;
+      });
+      document.getElementById('stat-revenue').textContent = '₹' + revenue;
+      document.getElementById('stat-orders').textContent = pending;
+    });
+
+    onSnapshot(collection(db, 'menuItems'), async (snap) => {
+      document.getElementById('stat-items').textContent = snap.docs.length;
+      
+      // Load predictions
+      const pBody = document.getElementById('prediction-body');
+      pBody.innerHTML = '';
+      for (const doc of snap.docs) {
+        const item = doc.data();
+        if(!item.isAvailable) continue;
+        const pred = await predictDemand(doc.id);
+        
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${item.name}</td>
+          <td>${pred.preBooked}</td>
+          <td><strong>${pred.prediction}</strong> <span class="badge badge-info" style="font-size:0.6rem">${pred.confidence}</span></td>
+          <td><button class="btn btn-secondary btn-sm" onclick="alert('Cooking target set to ${pred.prediction}')">Set Target</button></td>
+        `;
+        pBody.appendChild(tr);
+      }
+    });
+
+    // Chart.js Setup
+    const ctx = document.getElementById('salesChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        datasets: [{
+          label: 'Sales (₹)',
+          data: [1200, 1900, 1500, 2200, 2800, 800, 400],
+          backgroundColor: '#4F46E5',
+          borderRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+      }
+    });
+
+    // Seed Data Script
+    document.getElementById('seed-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('seed-btn');
+      btn.innerHTML = '<span class="loader"></span> Generating 30 Items...';
+      btn.disabled = true;
+
+      try {
+        // First, clear existing duplicates
+        const menuSnap = await getDocs(collection(db, 'menuItems'));
+        for (const docSnap of menuSnap.docs) {
+          await deleteDoc(docSnap.ref);
+        }
+
+        const items = [
+          // 10 BREAKFAST
+          { name: 'Masala Dosa', price: 45, category: 'breakfast', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f39ce9b1?w=300' },
+          { name: 'Idli & Vada', price: 35, category: 'breakfast', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f39ce9b1?w=300' },
+          { name: 'Pongal', price: 40, category: 'breakfast', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f39ce9b1?w=300' },
+          { name: 'Poori Sabji', price: 50, category: 'breakfast', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f39ce9b1?w=300' },
+          { name: 'Upma', price: 30, category: 'breakfast', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f39ce9b1?w=300' },
+          { name: 'Onion Uthappam', price: 45, category: 'breakfast', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f39ce9b1?w=300' },
+          { name: 'Poha', price: 35, category: 'breakfast', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f39ce9b1?w=300' },
+          { name: 'Aloo Paratha', price: 50, category: 'breakfast', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f39ce9b1?w=300' },
+          { name: 'Plain Dosa', price: 30, category: 'breakfast', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f39ce9b1?w=300' },
+          { name: 'Bread Omelette', price: 40, category: 'breakfast', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f39ce9b1?w=300' },
+          
+          // 10 LUNCH
+          { name: 'Veg Thali', price: 60, category: 'lunch', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=300' },
+          { name: 'Chicken Biryani', price: 120, category: 'lunch', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=300' },
+          { name: 'Paneer Butter Masala', price: 90, category: 'lunch', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f39ce9b1?w=300' },
+          { name: 'Egg Curry & Rice', price: 80, category: 'lunch', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=300' },
+          { name: 'Dal Makhani & Roti', price: 70, category: 'lunch', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=300' },
+          { name: 'Lemon Rice', price: 40, category: 'lunch', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=300' },
+          { name: 'Curd Rice', price: 40, category: 'lunch', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=300' },
+          { name: 'Mini Meals', price: 50, category: 'lunch', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=300' },
+          { name: 'Chole Bhature', price: 65, category: 'lunch', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=300' },
+          { name: 'Veg Fried Rice', price: 70, category: 'lunch', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=300' },
+
+          // 10 SNACKS
+          { name: 'Samosa (2 pcs)', price: 20, category: 'snacks', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=300' },
+          { name: 'French Fries', price: 40, category: 'snacks', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1576107222646-7ab5de67e811?w=300' },
+          { name: 'Cold Coffee', price: 30, category: 'snacks', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1461023058943-07fcbe16d735?w=300' },
+          { name: 'Masala Chai', price: 15, category: 'snacks', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1576107222646-7ab5de67e811?w=300' },
+          { name: 'Veg Puff', price: 15, category: 'snacks', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=300' },
+          { name: 'Egg Puff', price: 20, category: 'snacks', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=300' },
+          { name: 'Onion Pakoda', price: 30, category: 'snacks', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=300' },
+          { name: 'Maggi Noodles', price: 35, category: 'snacks', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1576107222646-7ab5de67e811?w=300' },
+          { name: 'Sweet Corn', price: 25, category: 'snacks', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1576107222646-7ab5de67e811?w=300' },
+          { name: 'Milkshake', price: 45, category: 'snacks', isAvailable: true, imageUrl: 'https://images.unsplash.com/photo-1461023058943-07fcbe16d735?w=300' }
+        ];
+
+        let itemIds = [];
+        for (const item of items) {
+          const docRef = await addDoc(collection(db, 'menuItems'), item);
+          itemIds.push(docRef.id);
+        }
+
+        // Generate 7 days fake sales for predictions
+        for (let i = 0; i < 7; i++) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          for(const id of itemIds) {
+             await addDoc(collection(db, 'salesHistory'), {
+               itemId: id,
+               date: d,
+               quantity: Math.floor(Math.random() * 50) + 10
+             });
+          }
+        }
+        showToast('Generated 30 Items!', 'success');
+        setTimeout(() => location.reload(), 1500);
+      } catch(e) {
+        showToast('Error seeding: ' + e.message, 'error');
+        btn.innerHTML = '<i class="fas fa-database"></i> Seed Data';
+        btn.disabled = false;
+      }
+    });
+
+  </script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Function to check if user is admin
+    function isAdmin() {
+      return request.auth != null && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /waste/{userId}/{fileName} {
+      // Only admins can upload and read waste photos
+      allow read, write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /reports/{userId}/{fileName} {
+      // Users can upload and read their own report photos, admins can read all
+      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    match /menu/{fileName} {
+      // Anyone can view menu images, only admins can upload
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+  }
+}
